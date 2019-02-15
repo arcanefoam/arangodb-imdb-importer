@@ -1,4 +1,4 @@
-#README
+# README
 
 Importing this way takes a LOT of time. To make it easier to do this in separate batches, I recommend splitting the
 source files in chunks of 100k lines.
