@@ -1,0 +1,9 @@
+curl -d '{"username":"epsilon", "password":"epsilon"}' -H "Content-Type: application/json" -X POST http://localhost:8529/_open/auth
+{"jwt":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1NTIyMjgyNDIsImlhdCI6MS41NDk2MzYyNDI4MzAwMjA4ZSs2LCJpc3MiOiJhcmFuZ29kYiIsInByZWZlcnJlZF91c2VybmFtZSI6ImVwc2lsb24ifQ==.99Bdd5jQuQM-tcR1r2F-FdznU-OY3-3imtp04myiKKc="}
+
+
+Authorization: bearer
+
+curl --header 'accept: application/json' \
+     -H "Authorization: bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE1NTIyMjgyNDIsImlhdCI6MS41NDk2MzYyNDI4MzAwMjA4ZSs2LCJpc3MiOiJhcmFuZ29kYiIsInByZWZlcnJlZF91c2VybmFtZSI6ImVwc2lsb24ifQ==.99Bdd5jQuQM-tcR1r2F-FdznU-OY3-3imtp04myiKKc==" \
+     --dump - http://localhost:8529/_db/epsilon/_api/collection/Titles/count
