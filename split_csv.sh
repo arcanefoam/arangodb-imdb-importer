@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+if [ "$#" -ne 2 ]; then
+    echo "Illegal number of parameters. You must provide a file name to split and the split size"
+    exit 1
+fi
 name=${1%.*}_
 echo $name
 tail -n +2 $1 | split -l $2 $1 $name

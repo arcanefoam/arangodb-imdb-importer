@@ -6,10 +6,15 @@ import progressbar
 from pyArango.connection import Connection
 from pyArango.theExceptions import CreationError
 
-from imdb import collections as imdbCols, Titles, People
+from imdb import collections as imdbCols, Titles, People, TitleAlias, Ratings
 
 
 def rawcount(filename):
+    """
+    Get the row count for the file for progress indication
+    :param filename: The input file being processed
+    :return:
+    """
     f = open(filename, 'rb')
     lines = 0
     buf_size = 1024 * 1024
@@ -24,6 +29,15 @@ def rawcount(filename):
 
 
 def connect_to_db(dbname, url='http://127.0.0.1:8529', username=None, password=None, createdb=False):
+    """
+    Connect to the ArangoDB database
+    :param dbname:
+    :param url:
+    :param username:
+    :param password:
+    :param createdb:
+    :return:
+    """
     conn = Connection(arangoURL=url, username=username, password=password)
     if createdb:
         conn.createDatabase(name=dbname)
@@ -32,6 +46,11 @@ def connect_to_db(dbname, url='http://127.0.0.1:8529', username=None, password=N
 
 
 def create_collections(db, names):
+    """
+    Create collections for the given names
+    :param db: the database
+    :param names: the list of names for the collections to create
+    """
     for c in names:
         try:
             db.createCollection(c)
@@ -42,6 +61,13 @@ def create_collections(db, names):
 
 
 def create_vertices(vertex_type, file, g):
+    """
+    Create vertices in the graph for each row in the file. If the row+vertex_type have edge information, the required
+    edges are created too
+    :param vertex_type: The Class for the vertex. It should define a _fields,  _csv_headers and _edges attributes
+    :param file: The file to process
+    :param g: The graph
+    """
     lines = rawcount(filename=file)
     collection_name = vertex_type.__name__
     with open(file, newline='') as csvfile:
@@ -49,32 +75,41 @@ def create_vertices(vertex_type, file, g):
         next(reader, None)  # skip the headers
         # label = click.style(f"Processing {collection_name}", fg='green')
         with progressbar.ProgressBar(max_value=lines, redirect_stdout=True) as bar:
-            for row in reader:
-                bar.update(reader.line_num)
-                try:
-                    g.createVertex(collection_name, row)
-                except CreationError:
-                    pass    # Ignore duplicate info FIXME this should be configurable
-                try:
-                    for e in vertex_type._edges:
-                        values = row[e['key']].split(',')
-                        try:
+            try:
+                for row in reader:
+                    bar.update(reader.line_num)
+                    # Only keep attributes defined in the Class's _fields
+                    attribs = {k: row[k] for k in vertex_type._fields.keys()}
+                    try:
+                        vertex = g.createVertex(collection_name, attribs)
+                    except CreationError as e:
+                        print(e)
+                        pass    # Ignore duplicate info FIXME this should be configurable
+                    try:
+                        for e in vertex_type._edges:
+                            values = row[e['key']].split(',')
                             if 'to' in e:
                                 for v in values:
-                                    theGraph.createEdge(e['collection'],
-                                                        _fromId=f"{collection_name}/{row['_key']}",
-                                                        _toId=f"{e['to']}/{v}",
-                                                        edgeAttributes=dict())
+                                    try:
+                                        graph.createEdge(e['collection'],
+                                                         _fromId=f"{collection_name}/{vertex._key}",
+                                                         _toId=f"{e['to']}/{v}",
+                                                         edgeAttributes=dict())
+                                    except CreationError:
+                                        pass  # Ignore duplicate info FIXME this should be configurable
                             elif 'from' in e:
                                 for v in values:
-                                    theGraph.createEdge(e['collection'],
-                                                        _toId=f"{collection_name}/{row['_key']}",
-                                                        _fromId=f"{e['from']}/{v}",
-                                                        edgeAttributes=dict())
-                        except CreationError:
-                            pass  # Ignore duplicate info FIXME this should be configurable
-                except AttributeError:
-                    pass
+                                    try:
+                                        graph.createEdge(e['collection'],
+                                                         _toId=f"{collection_name}/{vertex._key}",
+                                                         _fromId=f"{e['from']}/{v}",
+                                                         edgeAttributes=dict())
+                                    except CreationError:
+                                        pass  # Ignore duplicate info FIXME this should be configurable
+                    except AttributeError:
+                        pass
+            except Exception as e:
+                print("Bad line is: ", reader.line_num, e)
 
 
 def files_for(path):
@@ -97,11 +132,12 @@ def files_for(path):
     for f in files:
         if f not in lines:
             yield f
-            with open('.history', 'w') as h:
+            with open('.history', 'a') as h:
                 h.write(f)
+                h.write('\n')
 
 
-def process_file(vertex_type, path):
+def process_file(vertex_type, path, theGraph):
     for file in files_for(path):
         print(f"Processing {file}")
         create_vertices(vertex_type, file, theGraph)
@@ -110,13 +146,14 @@ def process_file(vertex_type, path):
 if __name__ == '__main__':
     db = connect_to_db("epsilon", username='epsilon', password='epsilon')
     create_collections(db, imdbCols)
-    theGraph = None
+    graph = None
     try:
-        theGraph = db.createGraph("IMDB")
+        graph = db.createGraph("IMDB")
     except CreationError:
         pass
-    if theGraph is None:
-        theGraph = db.graphs["IMDB"]
-    # process_file(Titles, 'data/title.basics.tsv', theGraph)
-    process_file(People, 'data/name.basics.tsv')
-
+    if graph is None:
+        graph = db.graphs["IMDB"]
+    # process_file(Titles, 'data/title.basics.tsv', graph)
+    # process_file(People, 'data/name.basics.tsv', graph)
+    # process_file(TitleAlias, 'data/title.akas.tsv', graph)
+    process_file(Ratings, 'data/title.ratings.tsv', graph)
